@@ -1,0 +1,54 @@
+module Test.ToSql where
+
+import Prelude
+import QueryStringPSQL.ToSql
+
+import Data.Either (Either(..))
+import Data.Int (toNumber)
+import Data.List as List
+import Data.Map as Map
+import Data.Time.Duration (Milliseconds(..))
+import Data.Tuple (Tuple(..))
+import Effect (Effect)
+import Effect.Aff (Aff, delay, launchAff_)
+import QueryStringPSQL.Parser.Utils as U
+import QueryStringPSQL.Types (QueryContext(..), QueryEngine(..), QueryParams(..), SqlCol(..))
+import Test.Spec (pending, describe, it)
+import Test.Spec.Assertions (shouldEqual)
+import Test.Spec.Reporter.Console (consoleReporter)
+import Test.Spec.Runner as Runner
+import Text.Parsing.Parser (ParseError, ParserT, runParser, fail)
+
+main :: Effect Unit
+main = launchAff_ $ Runner.run [consoleReporter] do 
+  describe "tuple" do
+    it "should parse tuple of numbers (1,2)" do
+      runParser "(1,2)" (U.tuple U.number U.number) `shouldEqual` (Right $ Tuple 1.0 2.0)
+  describe "SqlCol" do
+    it "should render SqlColNormal" do
+      toSql params context countrySqlCol `shouldEqual` "coalesce(cast(u.\"country\" as varchar), 'Unknown')"
+
+
+
+-- test :: Aff Unit
+-- test = toSql params context countrySqlCol `shouldEqual` "u.country"
+
+  -- where
+countrySqlCol = SqlColNormal "country"
+
+params = QueryParams { 
+  timezone : toNumber 2,
+  dateFrom : "2019-04-01",
+  dateTo : "2019-05-01",
+  breakdown : List.Nil,
+  filters : Map.empty
+}
+
+context = QueryContext {
+  noTimezone : false,
+  tableAlias : "u",
+  timeColName : "date_created",
+  fieldMap : Map.empty,
+  casted : false,
+  engine : PostgreSql
+}
