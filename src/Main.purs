@@ -1,4 +1,4 @@
-module Main where
+module QueryStringPSQL.Main where
 
 import Prelude
 

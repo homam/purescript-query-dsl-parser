@@ -9,7 +9,7 @@ import Data.Tuple (Tuple(..))
 import Math (floor)
 import Prelude (map, negate, show, ($), (*), (<), (<<<), (<>), (==), (>))
 import QueryStringPSQL.Context (LMapType(..), QueryContext, QueryEngine(..), TimezoneInfo(..))
-import QueryStringPSQL.Params (BreakdownDetails, FilterLang(..), FilterVal(..), LikePosition(..), QueryParams, SqlCol(..))
+import QueryStringPSQL.Params (Breakdown, BreakdownDetails, FilterLang(..), FilterVal(..), LikePosition(..), QueryParams, SqlCol(..), UnboundedRangeOrdering(..))
 
 appendSpace :: String -> String -> String
 appendSpace a b = a <> " " <> b
@@ -28,15 +28,27 @@ instance lMapTypeToSQL :: ToSql LMapType where
   toSql _ context (CastNulls s) = "coalesce(cast(" <> context.tableAlias <> ".\"" <> s <> "\" as varchar), 'Unknown')" 
   toSql _ context (Expr s) = "(" <> s <> ")"
 
+dimensionName :: QueryContext -> SqlCol -> String
+dimensionName context col = "\"d_" <> (case col of
+      SqlColNormal c -> c
+      SqlColJSON j   -> case context.engine of 
+        PostgreSql -> j.colName <> "->" <> j.jsonField 
+        Redshift -> "json_extract_path_text(" <> j.colName <> ", '" <> j.jsonField <> "')"
+  ) <> "\""
+
 instance singleBreakdownToSQL :: ToSql (Tuple SqlCol BreakdownDetails) where
   toSql params context (Tuple col _) = 
-    let dimName = case col of
-          SqlColNormal c -> c
-          SqlColJSON j   -> j.colName <> "->" <> j.jsonField 
-    in  toSql params context col <> " AS " <> "\"d_" <> dimName <> "\""
+    let dimName = dimensionName context col
+    in  toSql params context col <> " AS " <> dimName
 
 instance breakdownToSql :: ToSql (List.List (Tuple SqlCol BreakdownDetails)) where
   toSql params context list = List.intercalate ",\n" (map (toSql params context) list)
+
+singleBreakdownToSQLGroupBy :: QueryContext -> (Tuple SqlCol BreakdownDetails) -> String
+singleBreakdownToSQLGroupBy context (Tuple col _) = dimensionName context col
+
+breakdownToSqlGroupBy :: QueryContext -> Breakdown -> String
+breakdownToSqlGroupBy context list = List.intercalate ",\n" (map (singleBreakdownToSQLGroupBy context) list)
 
 instance filtersLangToSql :: ToSql (Tuple SqlCol FilterLang) where
   toSql params context (Tuple col lang) = filterLangToStr' (toSql params context col) lang
@@ -45,6 +57,7 @@ instance filtersLangToSql :: ToSql (Tuple SqlCol FilterLang) where
       filterLangToStr' col' (FilterIn vals) = intercalate " OR " $ map ((\v -> col' <> " = "  <> v) <<< filterValToStr) vals 
       filterLangToStr' col' (FilterEq val) =  col' <> " = " <> filterValToStr val
       filterLangToStr' col' (FilterRange a b) = col' <> " >= "  <> filterValToRangeStr a <> " AND " <> col' <> " < " <> filterValToRangeStr b
+      filterLangToStr' col' (FilterUnboundedRange o v) = col' <> " " <> unboundedRangeOrderingStr o <> " "  <> filterValToRangeStr v
       filterLangToStr' col' (FilterNot fl) = "NOT (" <> filterLangToStr' col' fl <> ")"
       filterLangToStr' col' (FilterLike lk s) = col' <> " LIKE " <> inSq (
           case lk of 
@@ -52,6 +65,7 @@ instance filtersLangToSql :: ToSql (Tuple SqlCol FilterLang) where
             LikeBefore -> "%" <> s
             LikeBoth -> "%" <> s <> "%"
           )
+      filterLangToStr' col' FilterIsNull = col' <> " IS NULL"
 
       filterValToStr :: FilterVal -> String
       filterValToStr (FilterValStr s) = inSq s
@@ -61,7 +75,14 @@ instance filtersLangToSql :: ToSql (Tuple SqlCol FilterLang) where
       filterValToRangeStr :: FilterVal -> String
       filterValToRangeStr (FilterValUnquotedInt i) = show i
       filterValToRangeStr (FilterValUnquotedNumber i) = show i
-      filterValToRangeStr x = " NOT SUPPORTED " <> show x
+      filterValToRangeStr (FilterValStr x) = x
+
+      unboundedRangeOrderingStr :: UnboundedRangeOrdering -> String
+      unboundedRangeOrderingStr LT = "<"
+      unboundedRangeOrderingStr LTE = "<="
+      unboundedRangeOrderingStr GT = ">"
+      unboundedRangeOrderingStr GTE = ">="
+      unboundedRangeOrderingStr EQ = "="
 
       inSq :: String -> String
       inSq s = "'" <> s <> "'"
@@ -87,7 +108,9 @@ alias ctx col = ctx.tableAlias <> "." <> "\"" <> col <> "\""
 defaultCast :: QueryParams -> QueryContext -> SqlCol -> String
 defaultCast params context = go where
   go (SqlColNormal c) = normal c
-  go (SqlColJSON {colName, jsonField}) = alias context colName <> "->>" <> "'" <> jsonField <> "'"
+  go (SqlColJSON {colName, jsonField}) = case context.engine of 
+            PostgreSql -> alias context colName <> "->>" <> "'" <> jsonField <> "'"
+            Redshift -> "json_extract_path_text(" <> alias context colName <> ", '" <> jsonField <> "')"
   normal "$hour" = timeDim "hour"
   normal "$day" = timeDim "day"
   normal "$week" = timeDim "week"

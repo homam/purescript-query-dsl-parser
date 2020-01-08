@@ -12,7 +12,7 @@ import Effect.Aff (launchAff_)
 import Effect.Console as Console
 import Prelude (Unit, discard, identity, show, ($), (<$>))
 import QueryStringPSQL.Context (LMapType(..), QueryContext, QueryEngine(..), TimezoneInfo(..))
-import QueryStringPSQL.Params (FilterLang(..), FilterVal(..), LikePosition(..), QueryParams, SqlCol(..), emptyBreakdownDetails)
+import QueryStringPSQL.Params (FilterLang(..), FilterVal(..), LikePosition(..), QueryParams, SqlCol(..), UnboundedRangeOrdering(..), emptyBreakdownDetails)
 import QueryStringPSQL.Parser.Utils as U
 import QueryStringPSQL.ToSql (timestampFiltersToSqlWhere, toSql)
 import Test.Spec (describe, it)
@@ -66,7 +66,7 @@ main = do
           toSql params contextRedshift countrySqlCol `shouldEqual` "us.\"country\"" 
 
         it "should work for SqlColJSON" do
-          toSql params contextRedshift countrySqlColJson `shouldEqual` "us.\"traits\"->>'country'"  
+          toSql params contextPSQLWithTimezone countrySqlColJson `shouldEqual` "u.\"traits\"->>'country'"  
 
         it "should work for SqlColNormal fieldMapped to CastNulls" do
           toSql params (contextPSQL { fieldMap = fieldMapCountryToCountryCodeNulls  }) countrySqlCol `shouldEqual` "coalesce(cast(u.\"country_code\" as varchar), 'Unknown')"
@@ -91,8 +91,8 @@ main = do
           toSql params redshiftContextWithCountryCodeFieldMap breakDownByHour `shouldEqual`  
             "date_trunc('hour', us.\"timestamp\") AS \"d_$hour\""
         it "should work for Breakdown by JSON column" do
-          toSql params redshiftContextWithCountryCodeFieldMap breakDownByPublisherId `shouldEqual`  
-            "us.\"query_string\"->>'publisher_id' AS \"d_query_string->publisher_id\""
+          toSql params contextPSQLWithTimezone breakDownByPublisherId `shouldEqual`  
+            "u.\"query_string\"->>'publisher_id' AS \"d_query_string->publisher_id\""
         it "should work for Expr Map" do
           toSql params contextRedshift (Tuple (SqlColNormal "screen_size") emptyBreakdownDetails) `shouldEqual`  
             "(coalesce(cast(round(us.screen_width/ 50) :: Int * 50 as varchar) || 'X' || cast(round(us.screen_height/ 50) :: Int * 50 as varchar), 'Unknown')) AS \"d_screen_size\""
@@ -103,6 +103,7 @@ main = do
         let countryLike = Tuple countrySqlCol (FilterLike LikeBefore "E")
         let countryNotLike = Tuple countrySqlCol (FilterNot $ FilterIn $ fromFoldable [FilterValStr "NL", FilterValStr "DE"])
         let screenWidthRange = Tuple (SqlColNormal "screen_width") (FilterRange (FilterValUnquotedNumber 240.0) (FilterValUnquotedNumber 640.0))
+        let screenWidthUnboundedRange = Tuple (SqlColNormal "screen_width") (FilterUnboundedRange GTE (FilterValUnquotedInt 240))
         it "should work for a simple FilterEq" do
           toSql params contextRedshift countryEqNL `shouldEqual` """us."country" = 'NL'"""
           toSql params redshiftContextWithCountryCodeFieldMap countryEqNL `shouldEqual` """us."country_code" = 'NL'"""
@@ -114,6 +115,8 @@ main = do
           toSql params redshiftContextWithCountryCodeFieldMap countryNotLike `shouldEqual` """NOT (us."country_code" = 'NL' OR us."country_code" = 'DE')"""
         it "should work for Range of Numbers" do
           toSql params redshiftContextWithCountryCodeFieldMap screenWidthRange `shouldEqual` """us."screen_width" >= 240.0 AND us."screen_width" < 640.0"""
+        it "should work for Unboundedn Range" do
+          toSql params redshiftContextWithCountryCodeFieldMap screenWidthUnboundedRange `shouldEqual` """us."screen_width" >= 240"""
 
 
 params :: QueryParams
@@ -143,7 +146,9 @@ contextPSQLWithTimezone = {
     timezone: WithTimezone
   },
   tableAlias : "u",
-  fieldMap : Map.empty,
+  fieldMap : Map.fromFoldable [
+    Tuple "screen_size" (Expr "coalesce(cast(round(us.screen_width/ 50) :: Int * 50 as varchar) || 'X' || cast(round(us.screen_height/ 50) :: Int * 50 as varchar), 'Unknown')")
+  ],
   engine : PostgreSql
 }
 

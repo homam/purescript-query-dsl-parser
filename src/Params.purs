@@ -35,6 +35,9 @@ data SortOrder = ASC | DESC
 derive instance genericSortOrder :: Generic SortOrder _
 instance showSortOrder :: Show SortOrder where
   show = genericShow
+instance eqSortOrder :: Eq SortOrder where
+  eq x = genericEq x
+
 
 -- Sort by and order
 data Sort = Sort {
@@ -44,6 +47,8 @@ data Sort = Sort {
 derive instance genericSort :: Generic Sort _
 instance showSort :: Show Sort where
   show = genericShow
+instance eqSort :: Eq Sort where
+  eq x = genericEq x
 
 
 data BreakdownDetails = BreakdownDetails {
@@ -51,9 +56,11 @@ data BreakdownDetails = BreakdownDetails {
   valuesFilter :: Maybe Filters
 }
 derive instance genericBreakdownDetails :: Generic BreakdownDetails _
-
 instance showBreakdownDetails :: Show BreakdownDetails where
   show = genericShow
+instance eqBreakdownDetails :: Eq BreakdownDetails where
+  eq x = genericEq x
+
 
 emptyBreakdownDetails :: BreakdownDetails
 emptyBreakdownDetails = BreakdownDetails {
@@ -100,12 +107,25 @@ instance encodeJsonFilterVal :: EncodeJson FilterVal where
 instance decodeJsonFilterVal :: DecodeJson FilterVal where
   decodeJson = genericDecodeJson
 
+data UnboundedRangeOrdering = LT | LTE | GT | GTE | EQ
+derive instance genericUnboundedRangeOrdering :: Generic UnboundedRangeOrdering _
+instance showUnboundedRangeOrdering :: Show UnboundedRangeOrdering where
+  show a = genericShow a
+instance eqUnboundedRangeOrdering :: Eq UnboundedRangeOrdering where
+  eq a b = genericEq a b
+instance encodeJsonUnboundedRangeOrdering :: EncodeJson UnboundedRangeOrdering where
+  encodeJson x = genericEncodeJson x
+instance decodeJsonUnboundedRangeOrdering :: DecodeJson UnboundedRangeOrdering where
+  decodeJson x = genericDecodeJson x
+
 data FilterLang = 
     FilterIn (List.List FilterVal) 
   | FilterEq FilterVal
   | FilterRange FilterVal FilterVal
+  | FilterUnboundedRange UnboundedRangeOrdering FilterVal
   | FilterLike LikePosition String 
   | FilterNot FilterLang
+  | FilterIsNull
 
 derive instance genericFilterLang :: Generic FilterLang _
 instance showFilterLang :: Show FilterLang where
