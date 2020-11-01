@@ -12,7 +12,7 @@ import Effect.Aff (launchAff_)
 import Effect.Console as Console
 import Prelude (Unit, discard, identity, show, ($), (<$>))
 import QueryStringPSQL.Context (LMapType(..), QueryContext, QueryEngine(..), TimezoneInfo(..))
-import QueryStringPSQL.Params (FilterLang(..), FilterVal(..), LikePosition(..), QueryParams, SqlCol(..), UnboundedRangeOrdering(..), emptyBreakdownDetails)
+import QueryStringPSQL.Params (FilterLang(..), FilterVal(..), LikePosition(..), QueryParams, SqlCol(..), UnboundedRangeOrdering(..), emptyBreakdownDetails, emptyFilters)
 import QueryStringPSQL.Parser.Utils as U
 import QueryStringPSQL.ToSql (timestampFiltersToSqlWhere, toSql)
 import Test.Spec (describe, it)
@@ -117,6 +117,9 @@ main = do
           toSql params redshiftContextWithCountryCodeFieldMap screenWidthRange `shouldEqual` """us."screen_width" >= 240.0 AND us."screen_width" < 640.0"""
         it "should work for Unboundedn Range" do
           toSql params redshiftContextWithCountryCodeFieldMap screenWidthUnboundedRange `shouldEqual` """us."screen_width" >= 240"""
+      describe "Filters" do
+        it "should work for empty Filters" do
+          toSql params redshiftContextWithCountryCodeFieldMap emptyFilters `shouldEqual` "TRUE"
 
 
 params :: QueryParams

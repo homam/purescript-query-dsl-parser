@@ -126,6 +126,8 @@ data FilterLang =
   | FilterLike LikePosition String 
   | FilterNot FilterLang
   | FilterIsNull
+  | FilterNone
+--  | FilterLangOr FilterLang FilterLang
 
 derive instance genericFilterLang :: Generic FilterLang _
 instance showFilterLang :: Show FilterLang where

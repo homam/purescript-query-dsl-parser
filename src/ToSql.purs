@@ -66,6 +66,7 @@ instance filtersLangToSql :: ToSql (Tuple SqlCol FilterLang) where
             LikeBoth -> "%" <> s <> "%"
           )
       filterLangToStr' col' FilterIsNull = col' <> " IS NULL"
+      filterLangToStr' col' FilterNone = "TRUE"
 
       filterValToStr :: FilterVal -> String
       filterValToStr (FilterValStr s) = inSq s
@@ -88,7 +89,10 @@ instance filtersLangToSql :: ToSql (Tuple SqlCol FilterLang) where
       inSq s = "'" <> s <> "'"
 
 instance filtersToSql :: ToSql (Map.Map SqlCol FilterLang) where
-  toSql params context filters = intercalate (newLine <> "AND ") $ fromFoldable rest
+  toSql params context filters = 
+    if Map.isEmpty filters
+      then "TRUE"
+      else intercalate (newLine <> "AND ") $ fromFoldable rest
     where
 
       newLine = "\n" -- <> indent

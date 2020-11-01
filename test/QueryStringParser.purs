@@ -11,7 +11,7 @@ import Prelude (Unit, discard, ($))
 import QueryStringPSQL.Params (BreakdownDetails(..), FilterLang(..), FilterVal(..), LikePosition(..), Sort(..), SortOrder(..), SqlCol(..), UnboundedRangeOrdering(..), emptyBreakdownDetails, emptyFilters)
 import QueryStringPSQL.Parser.BreakdownDetailsParser (runBreakdownDetailsParser)
 import QueryStringPSQL.Parser.BreakdownParser (runBreakdownParser)
-import QueryStringPSQL.Parser.FilterLangParser (runFilterLangParser, runUnboundedRangeOrderingParser, unboundedRangeOrderingParser)
+import QueryStringPSQL.Parser.FilterLangParser (runFilterLangParser, runUnboundedRangeOrderingParser)
 import QueryStringPSQL.Parser.FilterValParser (runFilterValParser)
 import QueryStringPSQL.Parser.FiltersParser (runFiltersParser)
 import QueryStringPSQL.Parser.SqlColParser (runSqlColParser)
@@ -43,6 +43,8 @@ main = do
       it "should parse SqlColJSON" do
         runSqlColParser "query.publisher-id" `shouldEqual` (Right $ SqlColJSON {colName: "query", jsonField: "publisher-id"})
     describe "Parsing FilterLang" do
+      it "should parse FilterNone" do
+        runFilterLangParser "-" `shouldEqual` Right FilterNone
       it "should parse FilterLangEq" do
         runFilterLangParser "AE" `shouldEqual` Right (FilterEq $ FilterValStr "AE")
         runFilterLangParser "[AE,DE]" `shouldEqual` Right filterInAEDE
@@ -58,6 +60,8 @@ main = do
         runFilterLangParser "*DMB" `shouldEqual` Right filterLikeDMB
         runFilterLangParser "1*" `shouldEqual` Right filterLike1After
     describe "Parsing Filters" do
+      it "shoulld parse empty filter expression" do
+        runFiltersParser "-" `shouldEqual` Right emptyFilters
       it "should parse simple Filters expression" do
         runFiltersParser "country:[AE,DE]" `shouldEqual` Right (Map.fromFoldable $ Tuple (SqlColNormal "country") filterInAEDE : Nil)
         runFiltersParser "country: (AE, DE)" `shouldEqual` Right (Map.fromFoldable $ Tuple (SqlColNormal "country") filterInAEDE : Nil)

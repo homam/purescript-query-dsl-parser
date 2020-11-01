@@ -10,6 +10,7 @@ import QueryStringPSQL.Parser.FilterValParser (filterValParser)
 import QueryStringPSQL.Parser.Utils (list, parens, queryParser, tuple, (<+>))
 import Text.Parsing.Parser (ParseError, ParserT, runParser)
 import Text.Parsing.Parser.Combinators (try)
+import Text.Parsing.Parser.String (eof)
 
 
 unboundedRangeOrderingParser :: ParserT String Identity UnboundedRangeOrdering
@@ -25,8 +26,9 @@ filterLangParser = go where
   go =
         FilterNot <$> (queryParser.symbol "NOT" *> (parens rest))
     <|> rest
-  rest = 
-        FilterIn <$> list (filterValParser true)
+  rest =
+        FilterNone <$ (queryParser.symbol "-" *> eof)
+    <|> FilterIn <$> list (filterValParser true)
     <|> uncurry FilterRange <$> (queryParser.symbol "R" *> tuple (filterValParser false) (filterValParser false))
     <|> FilterUnboundedRange <$> unboundedRangeOrderingParser <*> filterValParser false
     <|> uncurry FilterLike <$> (
